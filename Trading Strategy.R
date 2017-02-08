@@ -1,5 +1,5 @@
 ## special treatments to action-direction
-## Shawn 2016-06-21
+## Shirley 2016-06-21
 
 library(data.table)
 library(gftUtils)
@@ -162,7 +162,7 @@ TDIsignals_Short <- opencloseAction(futuresTesta, "TDIsignals")$short
 
 ####################################################################################
 ## signals processing
-## Shawn 2016-06-22
+## Shirley 2016-06-22
 
 library(data.table)
 library(gftUtils)
