@@ -1,0 +1,210 @@
+#MC method using Pseudo random sequence 
+
+# Example: > AsianC_QMC(50,50,0.01,2,0.4,24,50000,Type = "Sobol",Plot=TRUE)
+# [1] 6.838347
+
+library(gsl)
+library(randtoolbox)
+
+Pseudo = function(NSteps,NRepl,VR=FALSE)
+{
+  mat <- matrix(runif(NSteps * NRepl),ncol = NSteps)
+  qnorm(mat)
+}
+#QMC method using Halton random sequence 
+Halton = function(NSteps,NRepl)
+{
+  qnorm(runif.halton(NRepl,NSteps))
+}
+
+#QMC method using Sobol random sequence 
+Sobol = function(NSteps,NRepl)
+{
+  #first method 
+  q <- qrng_alloc(type="sobol", NSteps)
+  rt <- qrng_get(q,NRepl)
+  qnorm(rt)
+  
+  # #second method 
+  # qnorm(sobol(NRepl,NSteps,scrambling=2))
+}
+
+#AsianC_MC2(50,50,0.01,2,0.4,24,50000)
+AsianC_QMC = function(S0,K,mu,T,sigma,NSteps,NRepl,VR=FALSE,Type=c("Pseudo","Sobol","Halton"),Plot=FALSE)
+{
+
+ptm <- proc.time()
+payoff <- vector(mode = "numeric",length = NRepl)
+payoffvr <- vector(mode = "numeric",length = NRepl)
+payoffvrr <- vector(mode = "numeric",length = NRepl)
+dt = T/NSteps
+drift = (mu-0.5*sigma^2)*dt
+vari = sigma*sqrt(dt)
+
+if (Type == "Halton")
+{
+  rdsq <- Halton(NSteps,NRepl)
+  Increments = drift + vari* t(rdsq)
+  Incrementsvr = drift + vari* t(-rdsq)
+}
+else if (Type == "Sobol")
+{
+  rdsq <- Sobol(NSteps,NRepl)
+  Increments = drift + vari* t(rdsq)
+  Incrementsvr = drift + vari* t(-rdsq)
+}
+else
+{
+  rdsq <- Pseudo(NSteps,NRepl)
+  Increments = drift + vari* t(rdsq)
+  Incrementsvr = drift + vari* t(-rdsq)
+}
+
+#Increments = drift + vari* t(Pseudo(NSteps,NRepl))
+  #t(Pseudo(NSteps,NRepl))
+  #t(Sobol(NSteps,NRepl))
+  #t(mat)
+  #t(Halton(NSteps,NRepl))
+
+for(i in 1:NRepl)
+{
+  if (VR==TRUE)
+  {
+    payoff[i] <- max(mean(S0*exp(cumsum(Increments[,i])))-K,0) * exp(-mu*T)
+    payoffvr[i] <- max(mean(S0*exp(cumsum(Incrementsvr[,i])))-K,0) * exp(-mu*T)
+    payoff[i] <- 0.5*payoff[i]+0.5*payoffvr[i]
+  }
+  else
+  {
+    payoff[i] <- max(mean(S0*exp(cumsum(Increments[,i])))-K,0) * exp(-mu*T)
+  }
+}
+
+#plot 
+if (Plot==TRUE){
+  est_ar <- cumsum(payoff)/(1:length(payoff))
+  #standard deviation 
+  esterr_ar <- sqrt(cumsum((payoff-est_ar)^2))/(1:length(payoff))
+  plot(est_ar,type="l",ylim=mean(payoff)+20*c(-esterr_ar[NRepl],esterr_ar[NRepl]))
+  #confidence interval 
+  lines(est_ar+2*esterr_ar,col="gold",lwd=2)  # mean + 2*sigma 
+  lines(est_ar-2*esterr_ar,col="gold",lwd=2)  # mean - 2*sigma 
+}
+
+#output: option price, stdev of error, runtime 
+c(mean(payoff),sqrt(var(payoff)/NRepl),proc.time()-ptm)
+
+#or just want standard deviation
+est_ar <- cumsum(payoff)/(1:length(payoff))
+esterr_ar <- sqrt(cumsum((payoff-est_ar)^2))/(1:length(payoff))
+# Example: >test <- AsianC_QMC(50,50,0.01,2,0.4,24,50000,Type = "Sobol")
+esterr_ar
+
+}
+
+# n=12
+# s=100
+# k=100
+# par(mfrow=c(1,1))
+# sobtest <- AsianC_QMC(s,k,0.01,1,0.4,n,1000,Type = "Sobol")
+# #sobtestvr <- AsianC_QMC(50,50,0.01,2,0.4,n,5000,VR=TRUE, Type = "Sobol")
+# #haltest <- AsianC_QMC(50,50,0.01,2,0.4,n,5000,Type = "Halton")
+# #haltestvr <- AsianC_QMC(50,50,0.01,2,0.4,n,5000,VR=TRUE, Type = "Halton")
+# psetest <- AsianC_QMC(s,k,0.01,1,0.4,n,1000,Type = "Pseudo")
+# #psetestvr <- AsianC_QMC(50,50,0.01,2,0.4,n,5000,VR=TRUE,Type = "Pseudo")
+# 
+# pp <- c(mean(psetest[0:200]),mean(psetest[200:400]),mean(psetest[400:600]),mean(psetest[600:800]),mean(psetest[800:1000]))
+# ss <- c(mean(sobtest[0:200]),mean(sobtest[200:400]),mean(sobtest[400:600]),mean(sobtest[600:800]),mean(sobtest[800:1000]))
+# 
+# 
+# # plot(psetest,type="l",ylim=c(0,1),ylab="Stdev")
+# # par(new=T)
+# # plot(sobtest,type="l",ylim=c(0,1),col="red",ylab="Stdev")
+# x<-c(200,400,600,800,1000)
+# plot(x,pp,type="l",ylim=c(0.5,1.2),xlab="Number of Samples",ylab="Stdev")
+# par(new=T)
+# plot(x,ss,type="l",ylim=c(0.5,1.2),col="red",xlab="Number of Samples",ylab="Stdev")
+
+
+#par(new=T)
+# plot(sobtestvr,type="l",ylim=c(0,1),col="blue",ylab="Stdev")
+# par(new=T)
+# plot(psetestvr,type="l",ylim=c(0,1),col="green",ylab="Stdev")
+# par(new=T)
+
+
+# plot(haltest,type="l",ylim=c(0,1),col="yellow",ylab="Stdev")
+# par(new=T)
+# plot(haltestvr,type="l",ylim=c(0,1),col="gold",ylab="Stdev")
+
+sobtest <- AsianC_QMC(100,100,0.01,2,0.2,4,10000,Type = "Sobol")
+#sobtestvr <- AsianC_QMC(100,100,0.01,1,0.2,64,50000,VR=TRUE, Type = "Sobol")
+psetest <- AsianC_QMC(100,100,0.01,1,0.2,4,10000,Type = "Pseudo")
+#psetestvr <- AsianC_QMC(100,100,0.01,1,0.2,64,50000,VR=TRUE,Type = "Pseudo")
+
+plot(psetest,type="l",xlim=c(0,10000),ylim=c(0.05,0.5),col="blue",xlab="Number of Samples",ylab="Std.dev",main ="Variance Reduction")
+par(new=T)
+plot(sobtest,type="l",xlim=c(0,10000),ylim=c(0.05,0.5),col="red",xlab="Number of Samples",ylab="Std.dev",main = "Variance Reduction")
+legend("topright",legend=c("QMC","MC"),cex=0.5,col = c("blue","red"),lty=1)
+
+ss<-seq(80,120,by=10)
+price<-vector(length = 5)
+variance<-vector(length=5)
+cost<-vector(length=5)
+
+for (i in 1:5)
+{
+  #price[i]<-AsianC_QMC(ss[i],100,0.01,1,0.2,12,10000,Type="Sobol",Plot=FALSE)[1]
+  variance[i]<-AsianC_QMC(ss[i],100,0.01,1,0.2,12,10000,Type="Sobol",Plot=FALSE)[2]
+  #cost[i]<-AsianC_QMC(ss[i],100,0.01,1,0.2,12,10000,Type="Sobol",Plot=FALSE)[3]
+}
+
+tt<-seq(500,50000,by=1000)
+p<-vector(length=50)
+v<-vector(length=50)
+cc<-vector(length=50)
+res<-matrix(nrow=50,ncol=3)
+
+
+for (j in 1:50)
+{
+  #p[j]<-AsianC_QMC(100,100,0.01,1,0.2,12,tt[j],Type="Sobol",Plot=FALSE)[1]
+  v[j]<-AsianC_QMC(100,100,0.01,1,0.2,12,tt[j],Type="Sobol",Plot=FALSE)[500+1000*(j-1)]
+  #cc[j]<-AsianC_QMC(100,100,0.01,1,0.2,12,tt[j],Type="Sobol",Plot=FALSE)[3]
+}
+
+#res[,1]<-p
+#res[,2]<-v
+#res[,3]<-cc
+ceqmc<-1/(v*v*cc)
+
+ttmc<-seq(500,50000,by=1000)
+pmc<-vector(length=50)
+vmc<-vector(length=50)
+ccmc<-vector(length=50)
+resmc<-matrix(nrow=50,ncol=3)
+
+
+for (k in 1:50)
+{
+  #pmc[k]<-AsianC_QMC(100,100,0.01,1,0.2,12,ttmc[k],Type="Pseudo",Plot=FALSE)[1]
+  vmc[k]<-AsianC_QMC(100,100,0.01,1,0.2,12,ttmc[k],Type="Pseudo",Plot=FALSE)[500+(k-1)*1000]
+  #ccmc[k]<-AsianC_QMC(100,100,0.01,1,0.2,12,ttmc[k],Type="Pseudo",Plot=FALSE)[3]
+}
+
+#resmc[,1]<-pmc
+#resmc[,2]<-vmc
+#resmc[,3]<-ccmc
+cemc<-1/(vmc*vmc*ccmc)
+
+plot(tt,cc,ylim=c(0,2.2),ylab="Number of Sampler",xlab="time")
+par(new=T)
+plot(ttmc,ccmc,ylim=c(0,2.2),ylab="Number of Sampler",xlab="time")
+
+diff<-(ccmc-cc)/cc
+plot(tt,diff,ylim=c(0,0.15),xlab="Number of Sampler",ylab="Relative Time Difference",type="p",main="Computational Cost")
+
+plot(tt,ceqmc,xlab="Number of Sampler",ylim=c(250,400),ylab="Computational Efficiency",col="red",type = "l",main="Computational Efficiency")
+par(new=T)
+plot(tt,cemc,xlab="Number of Sampler",ylim=c(250,400),ylab="Computational Efficiency",col="blue",type = "l",main="Computational Efficiency")
+legend("bottomright",legend=c("QMC","MC"),col=c("red","blue"),lty=1)
