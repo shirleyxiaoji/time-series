@@ -4,4 +4,4 @@ ARIMA model, Risk Measure, ets
 
 Quant trading strategy covers:
 
-signal trading strategy, pair trading strategy, ets
+signal trading strategy
